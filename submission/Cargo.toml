@@ -8,3 +8,7 @@ name = "non_crossing_matching_engine"
 path = "src/main.rs"
 
 [dependencies]
+anyhow = "1"
+csv = "1"
+ahash = "0.8"
+serde = { version = "1.0.229", features = ["derive", "rc"] }
