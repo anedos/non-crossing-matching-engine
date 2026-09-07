@@ -3,24 +3,38 @@ use anyhow::{Result, ensure, anyhow, bail};
 use csv::StringRecord;
 
 pub fn parse_command(record: &StringRecord) -> Result<Command> {
-    ensure!(
-        matches!(record.len(), 1 | 3 | 7),
-        "invalid field count: expected 1, 3, or 7, got {}",
-        record.len()
-    );
+    let command = record.get(0).ok_or_else(|| anyhow!("Empty command"))?;
 
-    match record.get(0) {
-        Some("N") => {
-            let record: StringRecord = record.iter().skip(1).collect();
-            let new_order: NewOrder = record.deserialize(None)?;
-            Ok(Command::New(new_order))
+    match command {
+        "N" => {
+            ensure!(
+                record.len() == 7,
+                "new order expects 7 fields, got {}",
+                record.len()
+            );
+
+            let fields: StringRecord = record.iter().skip(1).collect();
+            Ok(Command::New(fields.deserialize(None)?))
         }
-        Some("C") => {
-            let record: StringRecord = record.iter().skip(1).collect();
-            let cancel_order: CancelOrder = record.deserialize(None)?;
-            Ok(Command::Cancel(cancel_order))
+        "C" => {
+            ensure!(
+                record.len() == 3,
+                "cancel order expects 3 fields, got {}",
+                record.len()
+            );
+
+            let fields: StringRecord = record.iter().skip(1).collect();
+            Ok(Command::Cancel(fields.deserialize(None)?))
         }
-        Some("F") => Ok(Command::Flush),
+        "F" => {
+            ensure!(
+                record.len() == 1,
+                "flush expects 1 field, got {}",
+                record.len()
+            );
+
+            Ok(Command::Flush)
+        },
         other => bail!("invalid command: {:?}", other),
     }
 }

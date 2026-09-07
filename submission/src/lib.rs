@@ -39,9 +39,9 @@ where
         let record = record
             .with_context(|| format!("failed to read CSV record {record_number}"))?;
 
-        // let command = parse_command(&record)
-        //     .with_context(|| format!("invalid command in CSV record {record_number}"))?;
-        //
+        let command = parse_command(&record)
+            .with_context(|| format!("invalid command in CSV record {record_number}"))?;
+        
         // let events = engine
         //     .process(command)
         //     .with_context(|| format!("failed to process command {record_number}"))?;
