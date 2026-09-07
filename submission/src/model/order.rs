@@ -62,6 +62,8 @@ enum OrderSlot {
 pub struct Orders {
     slots: Vec<OrderSlot>,
     first_free: Option<OrderIndex>,
+    #[cfg(test)]
+    fail_next_allocation: bool,
 }
 
 impl Orders {
@@ -69,6 +71,8 @@ impl Orders {
         Self {
             slots: Vec::new(),
             first_free: None,
+            #[cfg(test)]
+            fail_next_allocation: false,
         }
     }
 
@@ -97,6 +101,12 @@ impl Orders {
     }
 
     fn add_order(&mut self, order: StoredOrder) -> Result<OrderIndex, std::num::TryFromIntError> {
+        // Exercise the capacity-error path without allocating billions of slots.
+        #[cfg(test)]
+        if std::mem::take(&mut self.fail_next_allocation) {
+            return u32::try_from(u64::MAX).map(OrderIndex);
+        }
+
         if let Some(idx) = self.first_free {
             let slot = &mut self.slots[idx.0 as usize];
 
@@ -114,6 +124,19 @@ impl Orders {
             let idx: OrderIndex = OrderIndex(u32::try_from(self.slots.len())?);
             self.slots.push(OrderSlot::Occupied(order));
             Ok(idx)
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn fail_next_allocation(&mut self) {
+        self.fail_next_allocation = true;
+    }
+
+    #[cfg(test)]
+    pub(crate) fn inspect_order(&self, idx: OrderIndex) -> StoredOrder {
+        match &self.slots[idx.0 as usize] {
+            OrderSlot::Occupied(order) => *order,
+            OrderSlot::Free { .. } => panic!("expected an occupied order slot"),
         }
     }
 }

@@ -1,9 +1,10 @@
 use std::collections::HashMap;
-use super::model::order::{Symbol, OrderKey, Orders, Side, Price, OrderIndex, StoredOrder};
-use super::model::book::{OrderBook, PriceLevel};
+use super::model::order::{Symbol, OrderKey, Orders, Side, Price, OrderIndex};
+use super::model::book::OrderBook;
 use super::model::command::{Command, NewOrder, CancelOrder};
 use super::model::event::{Event, Events};
 
+#[derive(Debug)]
 pub enum EngineError {
     DuplicateOrder(OrderKey),
     UnknownOrder(OrderKey),
@@ -85,15 +86,15 @@ impl OrderBookEngine {
         //      slot, modify a price level, or add an order location.
         //
         // 3. Insert a non-crossing order.
-        //    - Get or create the symbol's book and select the map for the order's side.
-        //    - Capture the current top so it can be compared with the top after insertion.
-        //    - Get or create the price level, then check that adding the quantity will not overflow.
+        //    - Read the existing book and level without creating either one.
+        //    - Capture the current top, previous tail, and checked new total quantity.
         //    - Create a StoredOrder whose previous link is the price level's current last order.
         //    - Insert it into Orders: reuse first_free and advance the free list when possible;
         //      otherwise, append a new occupied slot. Retain the resulting OrderIndex.
         //    - Link the previous order to the new index, by setting previous_order.next = new_idx,
         //      if the level was empty, also set first.
-        //    - Set the level's last index and total quantity.
+        //    - After allocation succeeds, get or create the book and level, then commit the
+        //      endpoints and checked total quantity. Errors must not leave empty levels behind.
         //    - Add an OrderLocation containing the symbol, side, price, and index, keyed by the
         //      order's OrderKey.
         //
@@ -117,28 +118,29 @@ impl OrderBookEngine {
             }
         }
 
-        // get or create the symbol's book and get the map for the order's side
-        let book: &mut OrderBook = self.books.entry(order.symbol.clone()).or_insert(OrderBook::new());
-
-        // get the current top before the book mutates
-        let current_top = book.get_top(order.side, order.price);
-
-        // --> start mutating operations <--
-        let price_level = book
-            .get_by_side_mut(order.side)
-            .entry(order.price)
-            .or_default();
-
-        // check price level does not overflow
-        let new_total_quantity = price_level.check_total_after_add(order.quantity)
-            .ok_or(EngineError::QuantityOverflow)?;
+        // Validate against existing state before allocating an order or creating map entries.
+        let book = self.books.get(&order.symbol);
+        let current_top = book.and_then(|book| book.get_top(order.side, order.price));
+        let price_level = book.and_then(|book| book.get_by_side(order.side).get(&order.price));
+        let (previous, new_total_quantity) = match price_level {
+            Some(level) => (
+                level.last(),
+                level.check_total_after_add(order.quantity)
+                    .ok_or(EngineError::QuantityOverflow)?,
+            ),
+            None => (None, order.quantity),
+        };
 
         let idx = self.orders
-            .append_after(price_level.last(), order.quantity)
-            .map_err(|_| EngineError::QuantityOverflow)?;
+            .append_after(previous, order.quantity)
+            .map_err(|_| EngineError::OrderCapacityExceeded)?;
 
-        // Set the level's last index and total quantity.
-        price_level.add_order(idx, order.quantity);
+        // All recoverable errors have been checked; commit the book state.
+        let book = self.books.entry(order.symbol.clone()).or_insert_with(OrderBook::new);
+        book.get_by_side_mut(order.side)
+            .entry(order.price)
+            .or_default()
+            .commit_add(idx, new_total_quantity);
 
         // Capture the updated top before finishing with book.
         let new_top = book.get_top(order.side, order.price);
@@ -215,5 +217,275 @@ impl OrderBookEngine {
         price: Price,
         order_index: OrderIndex) {
         self.order_locations.insert(order_key, OrderLocation::new(symbol, side, price, order_index));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::order::{Quantity, StoredOrder, UserId, UserOrderId};
+
+    type Snapshot = (
+        HashMap<Symbol, OrderBook>,
+        HashMap<OrderKey, OrderLocation>,
+        Orders,
+    );
+
+    fn snapshot(engine: &OrderBookEngine) -> Snapshot {
+        (
+            engine.books.clone(),
+            engine.order_locations.clone(),
+            engine.orders.clone(),
+        )
+    }
+
+    fn order(id: u64, symbol: &str, side: Side, price: Price, quantity: Quantity) -> NewOrder {
+        NewOrder {
+            user_id: UserId(7),
+            user_order_id: UserOrderId(id),
+            symbol: Symbol::from(symbol),
+            side,
+            price,
+            quantity,
+        }
+    }
+
+    fn assert_accepted(event: Event, id: u64) {
+        match event {
+            Event::Accepted { user_id, user_order_id } => {
+                assert_eq!(user_id, UserId(7));
+                assert_eq!(user_order_id, UserOrderId(id));
+            }
+            _ => panic!("expected Accepted"),
+        }
+    }
+
+    fn assert_events(events: Events, id: u64, side: Side, top: Option<(Price, Quantity)>) {
+        match (events, top) {
+            (Events::One(accepted), None) => assert_accepted(accepted, id),
+            (
+                Events::Two(accepted, Event::TopChanged { side: actual_side, top: Some(actual_top) }),
+                Some(expected_top),
+            ) => {
+                assert_accepted(accepted, id);
+                assert_eq!(actual_side, side);
+                assert_eq!(actual_top.inspect(), expected_top);
+            }
+            _ => panic!("unexpected event count, order, or top-change payload"),
+        }
+    }
+
+    fn assert_location(
+        engine: &OrderBookEngine,
+        id: u64,
+        symbol: &str,
+        side: Side,
+        price: Price,
+    ) -> OrderIndex {
+        let location = &engine.order_locations[&OrderKey::new(UserId(7), UserOrderId(id))];
+        assert_eq!(location.symbol.as_ref(), symbol);
+        assert_eq!(location.side, side);
+        assert_eq!(location.price, price);
+        location.order_index
+    }
+
+    #[test]
+    fn first_order_creates_level_and_emits_accepted_then_top() {
+        for side in [Side::Bid, Side::Ask] {
+            let mut engine = OrderBookEngine::new();
+            let events = engine.process_new(order(1, "BTC", side, 100, 5)).unwrap();
+            assert_events(events, 1, side, Some((100, 5)));
+
+            let idx = assert_location(&engine, 1, "BTC", side, 100);
+            assert_eq!(engine.books.len(), 1);
+            assert_eq!(engine.order_locations.len(), 1);
+            let book = &engine.books["BTC"];
+            assert_eq!(book.get_by_side(side).len(), 1);
+            assert_eq!(book.get_by_side(side)[&100].inspect(), (5, Some(idx), Some(idx)));
+            assert_eq!(engine.orders.inspect_order(idx), StoredOrder::new(5, None, None));
+            let opposite = match side { Side::Bid => Side::Ask, Side::Ask => Side::Bid };
+            assert!(book.get_by_side(opposite).is_empty());
+        }
+    }
+
+    #[test]
+    fn better_price_changes_top_to_new_levels_quantity() {
+        for (side, better) in [(Side::Bid, 110), (Side::Ask, 90)] {
+            let mut engine = OrderBookEngine::new();
+            let initial = engine.process_new(order(1, "BTC", side, 100, 5)).unwrap();
+            assert_events(initial, 1, side, Some((100, 5)));
+            let events = engine.process_new(order(2, "BTC", side, better, 3)).unwrap();
+            assert_events(events, 2, side, Some((better, 3)));
+            assert_location(&engine, 2, "BTC", side, better);
+            assert_eq!(engine.books["BTC"].get_by_side(side)[&100].inspect().0, 5);
+        }
+    }
+
+    #[test]
+    fn worse_price_is_stored_without_top_change() {
+        for (side, worse) in [(Side::Bid, 90), (Side::Ask, 110)] {
+            let mut engine = OrderBookEngine::new();
+            let initial = engine.process_new(order(1, "BTC", side, 100, 5)).unwrap();
+            assert_events(initial, 1, side, Some((100, 5)));
+            let events = engine.process_new(order(2, "BTC", side, worse, 3)).unwrap();
+            assert_events(events, 2, side, None);
+            let idx = assert_location(&engine, 2, "BTC", side, worse);
+            let book = &engine.books["BTC"];
+            assert_eq!(book.get_by_side(side)[&worse].inspect(), (3, Some(idx), Some(idx)));
+            assert_eq!(book.get_top(side, worse).unwrap().inspect(), (100, 5));
+        }
+    }
+
+    #[test]
+    fn same_price_orders_update_total_and_keep_fifo_links() {
+        for side in [Side::Bid, Side::Ask] {
+            let mut engine = OrderBookEngine::new();
+            for (id, quantity, total) in [(1, 5, 5), (2, 3, 8), (3, 7, 15)] {
+                let events = engine.process_new(order(id, "BTC", side, 100, quantity)).unwrap();
+                assert_events(events, id, side, Some((100, total)));
+            }
+
+            let indices = [1, 2, 3].map(|id| assert_location(&engine, id, "BTC", side, 100));
+            assert_eq!(engine.order_locations.len(), 3);
+            assert_eq!(
+                engine.books["BTC"].get_by_side(side)[&100].inspect(),
+                (15, Some(indices[0]), Some(indices[2])),
+            );
+            assert_eq!(engine.orders.inspect_order(indices[0]), StoredOrder::new(5, None, Some(indices[1])));
+            assert_eq!(engine.orders.inspect_order(indices[1]), StoredOrder::new(3, Some(indices[0]), Some(indices[2])));
+            assert_eq!(engine.orders.inspect_order(indices[2]), StoredOrder::new(7, Some(indices[1]), None));
+        }
+    }
+
+    #[test]
+    fn crossing_orders_are_rejected_without_mutation() {
+        for (resting_side, incoming_side, crossing_prices) in [
+            (Side::Ask, Side::Bid, [100, 101]),
+            (Side::Bid, Side::Ask, [100, 99]),
+        ] {
+            let mut engine = OrderBookEngine::new();
+            let initial = engine.process_new(order(1, "BTC", resting_side, 100, 5)).unwrap();
+            assert_events(initial, 1, resting_side, Some((100, 5)));
+            let before = snapshot(&engine);
+
+            for price in crossing_prices {
+                let events = engine.process_new(order(2, "BTC", incoming_side, price, 3)).unwrap();
+                match events {
+                    Events::One(Event::Rejected { user_id, user_order_id }) => {
+                        assert_eq!(user_id, UserId(7));
+                        assert_eq!(user_order_id, UserOrderId(2));
+                    }
+                    _ => panic!("expected only Rejected"),
+                }
+                assert_eq!(snapshot(&engine), before);
+            }
+        }
+    }
+
+    #[test]
+    fn duplicate_identity_is_rejected_without_creating_another_book() {
+        let mut engine = OrderBookEngine::new();
+        let initial = engine.process_new(order(1, "BTC", Side::Bid, 100, 5)).unwrap();
+        assert_events(initial, 1, Side::Bid, Some((100, 5)));
+        let before = snapshot(&engine);
+
+        let result = engine.process_new(order(1, "ETH", Side::Ask, 200, 3));
+        assert!(matches!(result, Err(EngineError::DuplicateOrder(key))
+            if key == OrderKey::new(UserId(7), UserOrderId(1))));
+        assert_eq!(snapshot(&engine), before);
+    }
+
+    #[test]
+    fn symbols_sides_and_price_levels_have_independent_orders() {
+        let mut engine = OrderBookEngine::new();
+        let inputs = [
+            (1, "BTC", Side::Bid, 100, 2),
+            (2, "BTC", Side::Ask, 110, 3),
+            (3, "ETH", Side::Bid, 200, 4),
+            (4, "ETH", Side::Ask, 210, 5),
+            (5, "BTC", Side::Bid, 90, 6),
+        ];
+        for (id, symbol, side, price, quantity) in inputs {
+            let events = engine.process_new(order(id, symbol, side, price, quantity)).unwrap();
+            let expected_top = if id == 5 { None } else { Some((price, quantity)) };
+            assert_events(events, id, side, expected_top);
+            let idx = assert_location(&engine, id, symbol, side, price);
+            assert_eq!(engine.orders.inspect_order(idx), StoredOrder::new(quantity, None, None));
+        }
+
+        let other_book = engine.books["ETH"].clone();
+        let other_side = engine.books["BTC"].get_by_side(Side::Ask).clone();
+        let other_level = engine.books["BTC"].get_by_side(Side::Bid)[&90].clone();
+        let events = engine.process_new(order(6, "BTC", Side::Bid, 100, 7)).unwrap();
+        assert_events(events, 6, Side::Bid, Some((100, 9)));
+        assert_eq!(engine.books.len(), 2);
+        assert_eq!(engine.order_locations.len(), 6);
+        assert_eq!(engine.books["ETH"], other_book);
+        assert_eq!(engine.books["BTC"].get_by_side(Side::Ask), &other_side);
+        assert_eq!(engine.books["BTC"].get_by_side(Side::Bid)[&90], other_level);
+
+        let first = assert_location(&engine, 1, "BTC", Side::Bid, 100);
+        let last = assert_location(&engine, 6, "BTC", Side::Bid, 100);
+        assert_eq!(engine.orders.inspect_order(first), StoredOrder::new(2, None, Some(last)));
+        assert_eq!(engine.orders.inspect_order(last), StoredOrder::new(7, Some(first), None));
+        for (id, symbol, side, price, quantity) in inputs.into_iter().skip(1) {
+            let idx = assert_location(&engine, id, symbol, side, price);
+            assert_eq!(engine.orders.inspect_order(idx), StoredOrder::new(quantity, None, None));
+        }
+    }
+
+    #[test]
+    fn maximum_total_succeeds_and_overflow_leaves_state_unchanged() {
+        for side in [Side::Bid, Side::Ask] {
+            let mut engine = OrderBookEngine::new();
+            let initial = engine.process_new(order(1, "BTC", side, 100, Quantity::MAX - 5)).unwrap();
+            assert_events(initial, 1, side, Some((100, Quantity::MAX - 5)));
+            let events = engine.process_new(order(2, "BTC", side, 100, 5)).unwrap();
+            assert_events(events, 2, side, Some((100, Quantity::MAX)));
+            let before = snapshot(&engine);
+
+            assert!(matches!(
+                engine.process_new(order(3, "BTC", side, 100, 1)),
+                Err(EngineError::QuantityOverflow),
+            ));
+            assert_eq!(snapshot(&engine), before);
+
+            // The failed order's identity remains available at a different price.
+            let worse = match side { Side::Bid => 90, Side::Ask => 110 };
+            let events = engine.process_new(order(3, "BTC", side, worse, 1)).unwrap();
+            assert_events(events, 3, side, None);
+        }
+    }
+
+    #[test]
+    fn allocation_failure_preserves_existing_levels_and_creates_no_entries() {
+        for side in [Side::Bid, Side::Ask] {
+            let better = match side { Side::Bid => 110, Side::Ask => 90 };
+            for (seed_book, symbol, price, expected_total) in [
+                (false, "BTC", 100, 2), // Entirely empty engine.
+                (true, "BTC", 100, 7),  // Existing level and tail.
+                (true, "BTC", better, 2), // New price in an existing book.
+                (true, "ETH", 100, 2), // New symbol alongside an existing book.
+            ] {
+                let mut engine = OrderBookEngine::new();
+                if seed_book {
+                    let initial = engine.process_new(order(1, "BTC", side, 100, 5)).unwrap();
+                    assert_events(initial, 1, side, Some((100, 5)));
+                }
+                let before = snapshot(&engine);
+                engine.orders.fail_next_allocation();
+
+                assert!(matches!(
+                    engine.process_new(order(2, symbol, side, price, 2)),
+                    Err(EngineError::OrderCapacityExceeded),
+                ));
+                assert_eq!(snapshot(&engine), before);
+
+                // The same request can succeed after the allocation failure is gone.
+                let events = engine.process_new(order(2, symbol, side, price, 2)).unwrap();
+                assert_events(events, 2, side, Some((price, expected_total)));
+                assert_location(&engine, 2, symbol, side, price);
+            }
+        }
     }
 }

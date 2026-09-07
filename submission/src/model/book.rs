@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 use super::order::{OrderIndex, TotalQuantity, Price, Side};
 
 #[derive(Debug, Default)]
+#[cfg_attr(test, derive(Clone, PartialEq, Eq))]
 pub struct PriceLevel {
     total_quantity: TotalQuantity,
     first: Option<OrderIndex>,
@@ -13,12 +14,10 @@ impl PriceLevel {
         PriceLevel::default()
     }
 
-    // adding a non-crossing order, means updating quantity, checking it doesn't overflow
-    // then setting new order_idx as the last index
-    pub fn add_order(&mut self, order_idx: OrderIndex, quantity: TotalQuantity)  {
-        // Note, does not check for overflow, caller must use `check_total_after_add` to check
-        // for overflow
-        self.total_quantity += quantity;
+    /// Commit an allocated order using the total validated by `check_total_after_add`.
+    /// For a new, empty level, the checked total is the new order's quantity.
+    pub fn commit_add(&mut self, order_idx: OrderIndex, checked_total: TotalQuantity) {
+        self.total_quantity = checked_total;
 
         if self.first.is_none() {
             self.first = Some(order_idx);
@@ -34,9 +33,15 @@ impl PriceLevel {
     pub fn last(&self) -> Option<OrderIndex> {
         self.last
     }
+
+    #[cfg(test)]
+    pub(crate) fn inspect(&self) -> (TotalQuantity, Option<OrderIndex>, Option<OrderIndex>) {
+        (self.total_quantity, self.first, self.last)
+    }
 }
 
 #[derive(Debug)]
+#[cfg_attr(test, derive(Clone, PartialEq, Eq))]
 pub struct OrderBook {
     bids: BTreeMap<Price, PriceLevel>,
     asks: BTreeMap<Price, PriceLevel>,
@@ -98,6 +103,13 @@ pub struct TopOfBook {
 }
 
 #[cfg(test)]
+impl TopOfBook {
+    pub(crate) fn inspect(&self) -> (Price, TotalQuantity) {
+        (self.price, self.total_quantity)
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
 
@@ -107,7 +119,7 @@ mod tests {
         for (levels, prices) in [(&mut book.bids, bids), (&mut book.asks, asks)] {
             for &price in prices {
                 let mut level = PriceLevel::new();
-                level.add_order(OrderIndex(order_index), 1);
+                level.commit_add(OrderIndex(order_index), 1);
                 levels.insert(price, level);
                 order_index += 1;
             }
