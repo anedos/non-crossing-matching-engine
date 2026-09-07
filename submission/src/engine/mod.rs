@@ -52,13 +52,14 @@ impl OrderBookEngine {
         &mut self,
         command: Command
     ) -> Result<Events, EngineError> {
+        log::debug!("processing command: {command:?}");
         let events = match command {
             Command::New(order) => self.process_new(order),
             Command::Cancel(cancel) => self.process_cancel(cancel),
             Command::Flush => self.process_flush(),
         }?;
 
-        // iterate over events and write them
+        log::debug!("command completed: events={events:?}");
         Ok(events)
     }
 
@@ -105,6 +106,7 @@ impl OrderBookEngine {
 
         // exit if we receive a duplicated order key
         if self.order_locations.contains_key(&order_key) {
+            log::warn!("new order failed: key={order_key:?} symbol={} reason=DuplicateOrder", order.symbol);
             return Err(EngineError::DuplicateOrder(order_key));
         }
 
@@ -126,14 +128,20 @@ impl OrderBookEngine {
             Some(level) => (
                 level.last(),
                 level.check_total_after_add(order.quantity)
-                    .ok_or(EngineError::QuantityOverflow)?,
+                    .ok_or_else(|| {
+                        log::warn!("new order failed: key={order_key:?} symbol={} price={} reason=QuantityOverflow", order.symbol, order.price);
+                        EngineError::QuantityOverflow
+                    })?,
             ),
             None => (None, order.quantity),
         };
 
         let idx = self.orders
             .append_after(previous, order.quantity)
-            .map_err(|_| EngineError::OrderCapacityExceeded)?;
+            .map_err(|_| {
+                log::warn!("new order failed: key={order_key:?} symbol={} reason=OrderCapacityExceeded", order.symbol);
+                EngineError::OrderCapacityExceeded
+            })?;
 
         // All recoverable errors have been checked; commit the book state.
         let book = self.books.entry(order.symbol.clone()).or_insert_with(OrderBook::new);
@@ -195,8 +203,12 @@ impl OrderBookEngine {
 
         let order_key = OrderKey::new(cancel.user_id, cancel.user_order_id);
         let location = self.order_locations.get(&order_key)
-            .ok_or(EngineError::UnknownOrder(order_key))?
+            .ok_or_else(|| {
+                log::warn!("cancellation failed: key={order_key:?} reason=UnknownOrder");
+                EngineError::UnknownOrder(order_key)
+            })?
             .clone();
+        log::debug!("cancelling order: key={order_key:?} location={location:?}");
         let order = *self.orders.get(location.order_index);
         let book = self.books.get_mut(&location.symbol)
             .expect("active order references a missing book");
@@ -235,6 +247,7 @@ impl OrderBookEngine {
     }
 
     fn process_flush(&mut self) -> Result<Events, EngineError> {
+        log::debug!("flushing engine: books={} orders={}", self.books.len(), self.order_locations.len());
         self.books.clear();
         self.order_locations.clear();
         self.orders.clear();

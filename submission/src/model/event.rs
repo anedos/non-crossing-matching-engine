@@ -1,6 +1,7 @@
 use super::order::{UserId, UserOrderId, Side};
 use super::book::{TopOfBook};
 
+#[derive(Debug)]
 pub enum Event {
     Accepted {
         user_id: UserId,
@@ -17,6 +18,7 @@ pub enum Event {
 }
 
 #[must_use]
+#[derive(Debug)]
 pub enum Events {
     None,
     One(Event),

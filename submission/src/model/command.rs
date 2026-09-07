@@ -18,6 +18,7 @@ pub struct CancelOrder {
     pub user_order_id: UserOrderId,
 }
 
+#[derive(Debug)]
 pub enum Command {
     New (NewOrder),
     Cancel (CancelOrder),

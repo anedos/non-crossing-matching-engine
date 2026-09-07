@@ -12,3 +12,14 @@
 ## Structure
 
 ## Performance
+
+## Logging
+
+Logging is disabled by default. All enabled diagnostics go to stderr; stdout is reserved
+for CSV events. Set `RUST_LOG=non_crossing_matching_engine=debug` to log commands, their resulting
+events, cancellations, and flushes. Use `RUST_LOG=warn` for failed commands only, or
+`RUST_LOG=off` to disable logging explicitly.
+
+The executable initializes the logger. Library callers configure their own logger.
+The executable's CSV input/output wiring is still unfinished, so enabling logging does
+not yet make the executable process orders.

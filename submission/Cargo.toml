@@ -11,4 +11,6 @@ path = "src/main.rs"
 anyhow = "1"
 csv = "1"
 ahash = "0.8"
+log = "0.4"
+env_logger = { version = "0.11", default-features = false }
 serde = { version = "1.0.229", features = ["derive", "rc"] }
