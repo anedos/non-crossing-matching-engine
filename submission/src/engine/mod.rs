@@ -169,43 +169,75 @@ impl OrderBookEngine {
     }
 
     fn process_cancel(&mut self, cancel: CancelOrder) -> Result<Events, EngineError> {
-        // 1. Locate the order.
-        //    - Build an OrderKey from user_id and user_order_id and look it up in order_locations.
-        //    - Return UnknownOrder when the key is absent. The protocol does not define an output
-        //      event for an unknown cancellation, so treat it as an engine error.
-        //    - Use the OrderLocation to identify the symbol's book, side, price level, and exact
-        //      OrderSlot through order_index.
-        //    - Verify that the slot is Occupied. A Free slot indicates an internal consistency
-        //      error.
+        // 1. Locate the order without mutating state.
+        //    - Build an OrderKey from user_id and user_order_id.
+        //    - Return UnknownOrder if the key is absent from order_locations.
+        //    - Use the location to find the stored order, symbol's book, side, and price level.
+        //    - Capture the current top and the order's quantity, previous, and next links.
+        //    - Check quantity subtraction before removal. Missing internal entries or quantity
+        //      underflow indicate inconsistent engine state.
         //
-        // 2. Capture the current top, quantity, previous index, and next index, then unlink the
-        //    order from its price-level FIFO.
-        //    - Link the previous order to the cancelled order's next index, or set
-        //      price_level.first when the cancelled order was first.
-        //    - Link the next order to the cancelled order's previous index, or set
-        //      price_level.last when the cancelled order was last.
-        //    - Subtract the cancelled quantity from total_quantity using checked arithmetic.
+        // 2. Unlink the order and update its price level.
+        //    - Connect the previous order's next link to the cancelled order's next.
+        //    - Connect the next order's previous link to the cancelled order's previous.
+        //    - Replace the cancelled slot with Free and push it onto the free-list head.
+        //    - Update the level's first or last index when removing an endpoint.
+        //    - Assign the checked remaining total quantity.
         //
-        // 3. Clean up the remaining state.
-        //    - If the price level is empty, verify that first and last are None, then remove the
-        //      level from the appropriate bid or ask map.
-        //    - Remove the order's entry from order_locations.
-        //    - Replace the occupied slot with a Free slot and push it onto the free-list head:
+        // 3. Clean up empty entries.
+        //    - Remove the price level when no orders remain. Determine emptiness from its
+        //      endpoints, since zero-quantity orders can still occupy the level.
+        //    - Capture the updated top, then remove the symbol's book if both sides are empty.
+        //    - Remove the cancelled order's identity from order_locations.
         //
-        //      slots[order_index] = OrderSlot::Free {
-        //          next_free: orders.first_free,
-        //      };
-        //      orders.first_free = Some(order_index);
-        //
-        //      Do not traverse the free list.
-        //
-        // 4. Compare the affected side's new top with its previous top. Return Accepted for the
-        //    cancellation, followed by TopChanged when the best price or aggregate quantity
-        //    changed.
-        Ok(Events::None)
+        // 4. Emit Accepted, followed by TopChanged when the best price or aggregate quantity
+        //    changed. Use top: None when the affected side becomes empty.
+
+        let order_key = OrderKey::new(cancel.user_id, cancel.user_order_id);
+        let location = self.order_locations.get(&order_key)
+            .ok_or(EngineError::UnknownOrder(order_key))?
+            .clone();
+        let order = *self.orders.get(location.order_index);
+        let book = self.books.get_mut(&location.symbol)
+            .expect("active order references a missing book");
+        let current_top = book.get_top(location.side, location.price);
+        let book_side = book.get_by_side_mut(location.side);
+        let level = book_side.get_mut(&location.price)
+            .expect("active order references a missing price level");
+        let new_total = level.check_total_after_remove(order.quantity)
+            .expect("cancelled order quantity exceeds its price level total");
+
+        self.orders.remove(location.order_index);
+        level.commit_remove(order.previous, order.next, new_total);
+        if level.is_empty() {
+            book_side.remove(&location.price);
+        }
+        let new_top = book.get_top(location.side, location.price);
+        let book_is_empty = book.get_by_side(Side::Bid).is_empty()
+            && book.get_by_side(Side::Ask).is_empty();
+        if book_is_empty {
+            self.books.remove(&location.symbol);
+        }
+        self.order_locations.remove(&order_key);
+
+        let accepted = Event::Accepted {
+            user_id: cancel.user_id,
+            user_order_id: cancel.user_order_id,
+        };
+        if new_top == current_top {
+            Ok(Events::One(accepted))
+        } else {
+            Ok(Events::Two(accepted, Event::TopChanged {
+                side: location.side,
+                top: new_top,
+            }))
+        }
     }
 
     fn process_flush(&mut self) -> Result<Events, EngineError> {
+        self.books.clear();
+        self.order_locations.clear();
+        self.orders.clear();
         Ok(Events::None)
     }
 
@@ -224,6 +256,8 @@ impl OrderBookEngine {
 mod tests {
     use super::*;
     use crate::model::order::{Quantity, StoredOrder, UserId, UserOrderId};
+
+    mod cancel_flush;
 
     type Snapshot = (
         HashMap<Symbol, OrderBook>,

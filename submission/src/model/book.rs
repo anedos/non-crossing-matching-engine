@@ -30,6 +30,34 @@ impl PriceLevel {
         self.total_quantity.checked_add(quantity)
     }
 
+    pub fn check_total_after_remove(&self, quantity: TotalQuantity) -> Option<TotalQuantity> {
+        self.total_quantity.checked_sub(quantity)
+    }
+
+    /// Commit removal using the cancelled order's original links and validated total.
+    pub fn commit_remove(
+        &mut self,
+        previous: Option<OrderIndex>,
+        next: Option<OrderIndex>,
+        checked_total: TotalQuantity,
+    ) {
+        if previous.is_none() {
+            self.first = next;
+        }
+        if next.is_none() {
+            self.last = previous;
+        }
+        self.total_quantity = checked_total;
+        if self.is_empty() {
+            assert_eq!(self.total_quantity, 0, "empty price level has nonzero quantity");
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        assert_eq!(self.first.is_none(), self.last.is_none(), "price level endpoints disagree about emptiness");
+        self.first.is_none()
+    }
+
     pub fn last(&self) -> Option<OrderIndex> {
         self.last
     }
