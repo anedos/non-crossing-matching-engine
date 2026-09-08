@@ -1,4 +1,4 @@
-use crate::model::command::{CancelOrder, Command, NewOrder};
+use crate::model::command::{Command};
 use anyhow::{Result, ensure, anyhow, bail};
 use csv::StringRecord;
 

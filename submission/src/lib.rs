@@ -5,7 +5,7 @@ pub mod model;
 use std::io::{Read, Write};
 
 use anyhow::{Context, Result};
-use csv::{ReaderBuilder, WriterBuilder};
+use csv::{ReaderBuilder};
 
 use engine::OrderBookEngine;
 use io::input::parse_command;
@@ -16,9 +16,6 @@ where
     R: Read,
     W: Write,
 {
-    let mut engine = OrderBookEngine::new();
-    let mut line = String::new();
-
     // in a loop, read a line from reader
     // parse the command from the line
     // process the command, return Events
@@ -42,14 +39,14 @@ where
         let command = parse_command(&record)
             .with_context(|| format!("invalid command in CSV record {record_number}"))?;
         
-        // let events = engine
-        //     .process(command)
-        //     .with_context(|| format!("failed to process command {record_number}"))?;
-        //
-        // for event in events {
-        //     write_event(&mut writer, &event)
-        //         .context("failed to write output record")?;
-        // }
+        let events = engine
+            .process(command)
+            .with_context(|| format!("failed to process command {record_number}"))?;
+
+        for event in events {
+            write_event(&mut writer, &event, ", ")
+                .context("failed to write output record")?;
+        }
     }
 
     writer.flush().context("failed to flush output")

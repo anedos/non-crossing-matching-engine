@@ -131,6 +131,16 @@ pub struct TopOfBook {
     total_quantity: TotalQuantity,
 }
 
+impl TopOfBook {
+    pub(crate) fn price(&self) -> Price {
+        self.price
+    }
+
+    pub(crate) fn total_quantity(&self) -> TotalQuantity {
+        self.total_quantity
+    }
+}
+
 #[cfg(test)]
 impl TopOfBook {
     pub(crate) fn inspect(&self) -> (Price, TotalQuantity) {

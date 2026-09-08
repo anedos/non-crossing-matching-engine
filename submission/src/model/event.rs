@@ -24,3 +24,16 @@ pub enum Events {
     One(Event),
     Two(Event, Event),
 }
+
+impl IntoIterator for Events {
+    type Item = Event;
+    type IntoIter = std::iter::Flatten<std::array::IntoIter<Option<Event>, 2>>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        match self {
+            Self::None => [None, None],
+            Self::One(event) => [Some(event), None],
+            Self::Two(first, second) => [Some(first), Some(second)],
+        }.into_iter().flatten()
+    }
+}

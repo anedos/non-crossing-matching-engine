@@ -11,6 +11,9 @@ reports/
 
 # Build artifacts (keep submission/build inside for docker)
 target/
+submission/target/
+# Cargo.lock is untracked locally; let the container's Cargo generate its format.
+submission/Cargo.lock
 *.o
 *.a
 *.so
@@ -26,4 +29,3 @@ EXERCISE.md
 *.swp
 *.swo
 *~
-

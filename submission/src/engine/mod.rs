@@ -1,4 +1,6 @@
 use std::collections::HashMap;
+use anyhow::{Result};
+
 use super::model::order::{Symbol, OrderKey, Orders, Side, Price, OrderIndex};
 use super::model::book::{OrderBook, TopOfBook};
 use super::model::command::{Command, NewOrder, CancelOrder};
@@ -11,6 +13,19 @@ pub enum EngineError {
     QuantityOverflow,
     OrderCapacityExceeded,
 }
+
+impl std::fmt::Display for EngineError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::DuplicateOrder(key) => write!(f, "duplicate order: {key:?}"),
+            Self::UnknownOrder(key) => write!(f, "unknown order: {key:?}"),
+            Self::QuantityOverflow => f.write_str("price level quantity overflow"),
+            Self::OrderCapacityExceeded => f.write_str("order capacity exceeded"),
+        }
+    }
+}
+
+impl std::error::Error for EngineError {}
 
 // OrderLocation only contains sufficient fields to identify the right OrderBook - based on
 // symbol, side and price and the index to Orders > OrderSlot > StoredOrder
