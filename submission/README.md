@@ -21,6 +21,9 @@ Decoupling io from the engine, allows better testability, modularity improved pr
 The main processing engine is responsible for processing input and emitting the correct events.
 
 ## Performance
+### Computation complexity
+
+### Benchmarking
 
 ## Logging
 

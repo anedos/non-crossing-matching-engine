@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use ahash::AHashMap as HashMap;
 use anyhow::{Result};
 
 use super::model::order::{Symbol, OrderKey, Orders, Side, Price, OrderIndex};
