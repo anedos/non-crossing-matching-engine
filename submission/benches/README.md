@@ -1,5 +1,7 @@
 Run locally from the repository root:
 
+For per-command P90/P95/P99/P99.9 and heap allocation measurements, see the separate [latency and memory benchmark](metrics/README.md). The commands below run Criterion throughput benchmarks.
+
 ```sh
 ./submission/benches/run.sh
 ```

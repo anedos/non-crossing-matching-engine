@@ -1,0 +1,13 @@
+[package]
+name = "engine-metrics"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[features]
+memory = ["dep:allocation-counter"]
+
+[dependencies]
+non_crossing_matching_engine = { path = "../.." }
+hdrhistogram = { version = "7", default-features = false }
+allocation-counter = { version = "0.8", optional = true }
