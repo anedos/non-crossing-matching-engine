@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use super::model::order::{Symbol, OrderKey, Orders, Side, Price, OrderIndex};
-use super::model::book::OrderBook;
+use super::model::book::{OrderBook, TopOfBook};
 use super::model::command::{Command, NewOrder, CancelOrder};
 use super::model::event::{Event, Events};
 
@@ -155,25 +155,11 @@ impl OrderBookEngine {
 
         self.add_order_location(order_key, order.symbol, order.side, order.price, idx);
 
-        if new_top == current_top {
-            Ok(Events::One(
-                Event::Accepted {
-                    user_id: order.user_id,
-                    user_order_id: order.user_order_id
-                }
-            ))
-        } else {
-            Ok(Events::Two(
-                Event::Accepted {
-                    user_id: order.user_id,
-                    user_order_id: order.user_order_id
-                },
-                Event::TopChanged {
-                    side: order.side,
-                    top: new_top
-                }
-            ))
-        }
+        let accepted = Event::Accepted {
+            user_id: order.user_id,
+            user_order_id: order.user_order_id,
+        };
+        Ok(Self::accepted_events(accepted, order.side, current_top, new_top))
     }
 
     fn process_cancel(&mut self, cancel: CancelOrder) -> Result<Events, EngineError> {
@@ -236,13 +222,19 @@ impl OrderBookEngine {
             user_id: cancel.user_id,
             user_order_id: cancel.user_order_id,
         };
+        Ok(Self::accepted_events(accepted, location.side, current_top, new_top))
+    }
+
+    fn accepted_events(
+        accepted: Event,
+        side: Side,
+        current_top: Option<TopOfBook>,
+        new_top: Option<TopOfBook>,
+    ) -> Events {
         if new_top == current_top {
-            Ok(Events::One(accepted))
+            Events::One(accepted)
         } else {
-            Ok(Events::Two(accepted, Event::TopChanged {
-                side: location.side,
-                top: new_top,
-            }))
+            Events::Two(accepted, Event::TopChanged { side, top: new_top })
         }
     }
 

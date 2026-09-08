@@ -34,7 +34,8 @@ impl PriceLevel {
         self.total_quantity.checked_sub(quantity)
     }
 
-    /// Commit removal using the cancelled order's original links and validated total.
+    /// Commit removal using the canceled order's original links and its total. Caller assumes
+    /// responsibility for checking underflow
     pub fn commit_remove(
         &mut self,
         previous: Option<OrderIndex>,
