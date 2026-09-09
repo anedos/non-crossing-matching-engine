@@ -9,13 +9,12 @@ reports/
 .git/
 .gitignore
 
-# Build artifacts (keep submission/build inside for docker)
+# Build artifacts
 target/
-submission/target/
 # Host-only benchmarks have independent dependencies and build artifacts.
-submission/benches/
+benches/
 # Cargo.lock is untracked locally; let the container's Cargo generate its format.
-submission/Cargo.lock
+Cargo.lock
 *.o
 *.a
 *.so

@@ -1,22 +1,24 @@
+# Criterion throughput benchmarks
+
 Run locally from the repository root:
 
-For per-command P90/P95/P99/P99.9 and heap allocation measurements, see the separate [latency and memory benchmark](metrics/README.md). The commands below run Criterion throughput benchmarks.
+For per-command P90/P95/P99/P99.9 and heap allocation measurements, see the separate [latency and memory benchmark](../latency-memory/README.md). The commands below run Criterion throughput benchmarks.
 
 ```sh
-./submission/benches/run.sh
+./benches/criterion/run.sh
 ```
 
 The script uses Rust 1.92.0 specifically for benchmarking because Criterion 0.8 requires a newer compiler than the non-crossing matching engine assessment. It leaves your default toolchain unchanged. If rustup or Rust 1.92.0 is missing, it exits with installation instructions; it does not download anything automatically. The script works from any working directory and forwards arguments to Criterion. Run it without arguments for a normal benchmark run.
 
-Criterion is an independent package under `benches/criterion`, so its dependencies are not resolved by production builds or engine tests. The script keeps using `submission/target` for artifacts and existing saved baselines. Run `./submission/benches/run.sh --test` for benchmark smoke checks; `cargo test --manifest-path submission/Cargo.toml` runs engine and I/O tests. Host-only benchmarks are excluded from the Docker build context.
+Criterion is an independent package under `benches/criterion`, so its dependencies are not resolved by production builds or engine tests. The script keeps using `target` for artifacts and existing saved baselines. Run `./benches/criterion/run.sh --test` for benchmark smoke checks; `cargo test` runs engine and I/O tests. Host-only benchmarks are excluded from the Docker build context.
 
 The engine now uses `ahash::AHashMap`. To compare it against an existing standard-hasher baseline on the same machine and toolchain:
 
 ```sh
-./submission/benches/run.sh --baseline std-hashmap
+./benches/criterion/run.sh --baseline std-hashmap
 ```
 
-For a fresh comparison, temporarily replace `use ahash::AHashMap as HashMap;` in `src/engine/mod.rs` with `use std::collections::HashMap;`, run `./submission/benches/run.sh --save-baseline std-hashmap`, restore the ahash import, and run the comparison command above. Baseline files are local and ignored by Git. `--save-baseline` records whichever implementation is currently compiled; its name does not select the hasher.
+For a fresh comparison, temporarily replace `use ahash::AHashMap as HashMap;` in `src/engine/mod.rs` with `use std::collections::HashMap;`, run `./benches/criterion/run.sh --save-baseline std-hashmap`, restore the ahash import, and run the comparison command above. Baseline files are local and ignored by Git. `--save-baseline` records whichever implementation is currently compiled; its name does not select the hasher.
 
 Criterion measures 1,000, 10,000, and 100,000 input commands per iteration and reports time per batch and commands per second. Both deterministic workloads use unique insertion identities, 10 symbols, and both sides. All insertions are accepted and every cancellation targets a live order. Neither workload covers rejections or flush commands.
 
@@ -32,18 +34,20 @@ Criterion measures 1,000, 10,000, and 100,000 input commands per iteration and r
 To run only the mixed workload:
 
 ```sh
-./submission/benches/run.sh insert_cancel_events
+./benches/criterion/run.sh insert_cancel_events
 ```
 
 To run only the four 100,000-command cases:
 
 ```sh
-./submission/benches/run.sh '/100000$'
+./benches/criterion/run.sh '/100000$'
 ```
 
 The `engine` benchmark starts with an empty engine and excludes engine construction and input generation from timing. Processing includes map growth and order storage allocations; final engine destruction is excluded. The `csv_pipeline` benchmark includes parsing, engine processing, serialization into a growing memory buffer, flushing, and engine destruction. Input generation and final output-buffer destruction are excluded. Neither benchmark measures disk I/O or process startup.
 
-Use an idle machine for comparisons. Cargo builds benchmarks with the optimized bench profile. Reports and saved baselines are under `submission/target/criterion/`; the HTML overview is `submission/target/criterion/report/index.html`.
+Use an idle machine for comparisons. Cargo builds benchmarks with the optimized bench profile. Reports and saved baselines are under `target/criterion/`; the HTML overview is `target/criterion/report/index.html`.
+
+The script explicitly sets `CRITERION_HOME` to that report directory. Cargo's `--target-dir` alone does not reliably control Criterion's report location. Running Cargo directly without the script can instead put reports under `benches/criterion/target/criterion/`. Deleting a target directory also deletes any saved baselines inside it.
 
 Initial local baseline (2026-09-08, Rust 1.92.0, aarch64-apple-darwin, standard HashMap hasher, Criterion 0.8.2 defaults: 100 samples, 3-second warm-up, 5-second target measurement):
 

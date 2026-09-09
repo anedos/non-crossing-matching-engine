@@ -9,7 +9,8 @@ RUN apt-get update && apt-get install -y \
     && pip3 install --break-system-packages --no-cache-dir junit2html \
     && rm -rf /var/lib/apt/lists/*
 
-COPY ./submission /non_crossing_matching_engine/
+COPY ./Cargo.toml /non_crossing_matching_engine/
+COPY ./src /non_crossing_matching_engine/src
 COPY ./test /test
 
 WORKDIR /non_crossing_matching_engine

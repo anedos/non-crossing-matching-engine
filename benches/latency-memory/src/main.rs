@@ -3,7 +3,7 @@ use std::hint::black_box;
 use non_crossing_matching_engine::engine::OrderBookEngine;
 use non_crossing_matching_engine::model::command::Command;
 
-#[path = "../../support/workloads.rs"]
+#[path = "../../criterion/support/workloads.rs"]
 mod workloads;
 
 fn commands(count: usize, mixed: bool) -> Vec<Command> {

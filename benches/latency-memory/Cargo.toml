@@ -1,5 +1,5 @@
 [package]
-name = "engine-metrics"
+name = "engine-latency-memory"
 version = "0.1.0"
 edition = "2021"
 publish = false

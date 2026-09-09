@@ -292,7 +292,7 @@ fn event_record(event: Event) -> csv::StringRecord {
 #[test]
 fn engine_events_match_all_twelve_supplied_fixtures() {
     crate::test_logging::init_test_logging();
-    let fixtures = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../test");
+    let fixtures = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("test");
     for case in 1..=12 {
         let path = fixtures.join(case.to_string());
         let mut input = csv::ReaderBuilder::new()

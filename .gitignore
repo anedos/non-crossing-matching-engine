@@ -1,4 +1,4 @@
 .idea
-submission/Cargo.lock
-submission/target/
+Cargo.lock
+target/
 reports

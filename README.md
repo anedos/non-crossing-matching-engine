@@ -1,6 +1,6 @@
 # Order book engine
 
-The system presented here is a non-crossing order engine as per the specification in [EXERCISE.md](../EXERCISE.md). This
+The system presented here is a non-crossing order engine as per the specification in [EXERCISE.md](EXERCISE.md). This
 is a single-threaded order engine optimized for fast processing and memory efficiency. It has minimal dependencies, unit
 and integration tests and two different benchmarking suites, one based
 on [Criterion](https://github.com/bheisler/criterion.rs)
@@ -103,8 +103,8 @@ The engine's benchmarking suites. Additional info in the [benchmark README](benc
 From the repository root:
 
 ```sh
-cargo build --release --manifest-path submission/Cargo.toml
-cargo test --manifest-path submission/Cargo.toml
+cargo build --release
+cargo test
 ```
 
 The supplied non-crossing matching engine Docker build and all 12 stdin test cases have also passed with Rust 1.75 on Linux x64:
@@ -142,7 +142,11 @@ allocated order vector. Its capacity therefore follows the high-water mark rathe
 
 ### Benchmarking
 
-See the [Criterion README](benches/README.md) and the [latency and memory README](benches/metrics/README.md). Both
+For a quick view, see the [latency and heap allocation results summary](benches/latency-memory/README.md#results-at-a-glance),
+which records the saved September 9, 2026 measurements. Criterion's local HTML overview
+is at [target/criterion/report/index.html](target/criterion/report/index.html) after a benchmark run.
+
+See the [Criterion README](benches/criterion/README.md) and the [latency and memory README](benches/latency-memory/README.md). Both
 suites run on the host with Rust 1.92 and are separate Cargo packages, keeping their dependencies and instrumentation
 out of production builds. The scripts explain how to install the toolchain if it is missing.
 
@@ -157,7 +161,7 @@ Unit and integration tests also support optional logging, through a shared `init
 From the repository root:
 
 ```sh
-RUST_LOG=non_crossing_matching_engine=debug cargo test --manifest-path submission/Cargo.toml -- --nocapture
+RUST_LOG=non_crossing_matching_engine=debug cargo test -- --nocapture
 ```
 
 Without `RUST_LOG`, test logging stays off. Add a test-name filter before `--` to inspect a particular test,
@@ -176,14 +180,17 @@ belong to `run`; write and flush errors propagate to the caller.
 
 ## Future work
 
-I would love to turn this into a matching engine that executes crossing orders, with no memory allocations during
+1. I would love to turn this into a matching engine that executes crossing orders, with no memory allocations during
 processing within a preallocated capacity. Growing beyond that capacity would need an explicit allocation or
 capacity-limit policy. Order processing would remain strictly single-threaded on a per-symbol basis, with a thread
 pinned to a core. I would also introduce generic I/O middleware so orders can be read and events written outside of the
 main processing thread.
 
-Introduce an `EventSink` abstraction, in the form of a trait, so that output is abstracted and a message bus can be
+2. Introduce an `EventSink` abstraction, in the form of a trait, so that output is abstracted and a message bus can be
 easily integrated, e.g., Redis, Kafka or Aeron. This would also need explicit handling of backpressure, delivery
 failures and event routing by symbol.
 
-A more elaborate benchmarking suite covering cases such as millions of orders and thousands of symbols.
+3. A more elaborate benchmarking suite covering cases such as millions of orders and thousands of symbols.
+
+4. Add order tracing using the [tracing](https://docs.rs/tracing/latest/tracing/) crate and pipe traces to Grafana 
+   Tempo.

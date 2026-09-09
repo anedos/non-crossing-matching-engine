@@ -50,7 +50,7 @@ fn run_propagates_buffered_write_and_flush_failures() {
 #[test]
 fn executable_matches_all_twelve_fixtures_byte_for_byte() {
     test_logging::init_test_logging();
-    let fixtures = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../test");
+    let fixtures = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("test");
     for case in 1..=12 {
         let path = fixtures.join(case.to_string());
         let input = std::fs::read(path.join("in.csv")).unwrap();

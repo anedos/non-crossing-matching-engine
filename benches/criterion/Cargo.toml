@@ -10,5 +10,5 @@ criterion = { version = "0.8", features = ["html_reports"] }
 
 [[bench]]
 name = "order_events"
-path = "../order_events.rs"
+path = "order_events.rs"
 harness = false

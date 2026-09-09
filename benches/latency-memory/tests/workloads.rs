@@ -4,7 +4,7 @@ use non_crossing_matching_engine::model::event::Event;
 use non_crossing_matching_engine::model::order::Side;
 use std::collections::HashMap;
 
-#[path = "../../support/workloads.rs"]
+#[path = "../../criterion/support/workloads.rs"]
 mod workloads;
 
 #[test]
