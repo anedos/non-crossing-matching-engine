@@ -4,5 +4,6 @@ mod serializer;
 
 #[cfg(test)]
 mod tests {
+    mod input;
     mod output;
 }

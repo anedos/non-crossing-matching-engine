@@ -1,6 +1,8 @@
-use crate::model::command::{Command};
-use anyhow::{Result, ensure, anyhow, bail};
+use crate::model::command::{CancelOrder, Command, NewOrder};
+use crate::model::order::{Price, Quantity, Side, Symbol, UserId, UserOrderId};
+use anyhow::{anyhow, bail, ensure, Result};
 use csv::StringRecord;
+use serde::de::IgnoredAny;
 
 pub fn parse_command(record: &StringRecord) -> Result<Command> {
     let command = record.get(0).ok_or_else(|| anyhow!("Empty command"))?;
@@ -13,8 +15,23 @@ pub fn parse_command(record: &StringRecord) -> Result<Command> {
                 record.len()
             );
 
-            let fields: StringRecord = record.iter().skip(1).collect();
-            Ok(Command::New(fields.deserialize(None)?))
+            let (_, user_id, symbol, price, quantity, side, user_order_id): (
+                IgnoredAny,
+                UserId,
+                Symbol,
+                Price,
+                Quantity,
+                Side,
+                UserOrderId,
+            ) = record.deserialize(None)?;
+            Ok(Command::New(NewOrder {
+                user_id,
+                symbol,
+                price,
+                quantity,
+                side,
+                user_order_id,
+            }))
         }
         "C" => {
             ensure!(
@@ -23,8 +40,12 @@ pub fn parse_command(record: &StringRecord) -> Result<Command> {
                 record.len()
             );
 
-            let fields: StringRecord = record.iter().skip(1).collect();
-            Ok(Command::Cancel(fields.deserialize(None)?))
+            let (_, user_id, user_order_id): (IgnoredAny, UserId, UserOrderId) =
+                record.deserialize(None)?;
+            Ok(Command::Cancel(CancelOrder {
+                user_id,
+                user_order_id,
+            }))
         }
         "F" => {
             ensure!(
@@ -34,7 +55,7 @@ pub fn parse_command(record: &StringRecord) -> Result<Command> {
             );
 
             Ok(Command::Flush)
-        },
+        }
         other => bail!("invalid command: {:?}", other),
     }
 }

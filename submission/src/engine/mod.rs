@@ -125,8 +125,9 @@ impl OrderBookEngine {
             return Err(EngineError::DuplicateOrder(order_key));
         }
 
-        // emit a Rejected event for any order that crosses
-        if let Some(book) = self.books.get(&order.symbol) {
+        // Reuse the lookup for crossing validation and the existing price level.
+        let book = self.books.get(&order.symbol);
+        if let Some(book) = book {
             if book.crosses(order.side, order.price) {
                 return Ok(Events::One(Event::Rejected {
                     user_id: order.user_id,
@@ -136,8 +137,7 @@ impl OrderBookEngine {
         }
 
         // Validate against existing state before allocating an order or creating map entries.
-        let book = self.books.get(&order.symbol);
-        let current_top = book.and_then(|book| book.get_top(order.side, order.price));
+        let current_top = book.and_then(|book| book.get_top(order.side));
         let price_level = book.and_then(|book| book.get_by_side(order.side).get(&order.price));
         let (previous, new_total_quantity) = match price_level {
             Some(level) => (
@@ -159,14 +159,14 @@ impl OrderBookEngine {
             })?;
 
         // All recoverable errors have been checked; commit the book state.
-        let book = self.books.entry(order.symbol.clone()).or_insert_with(OrderBook::new);
+        let book = self.books.entry(order.symbol.clone()).or_default();
         book.get_by_side_mut(order.side)
             .entry(order.price)
             .or_default()
             .commit_add(idx, new_total_quantity);
 
         // Capture the updated top before finishing with book.
-        let new_top = book.get_top(order.side, order.price);
+        let new_top = book.get_top(order.side);
 
         self.add_order_location(order_key, order.symbol, order.side, order.price, idx);
 
@@ -213,7 +213,7 @@ impl OrderBookEngine {
         let order = *self.orders.get(location.order_index);
         let book = self.books.get_mut(&location.symbol)
             .expect("active order references a missing book");
-        let current_top = book.get_top(location.side, location.price);
+        let current_top = book.get_top(location.side);
         let book_side = book.get_by_side_mut(location.side);
         let level = book_side.get_mut(&location.price)
             .expect("active order references a missing price level");
@@ -225,7 +225,7 @@ impl OrderBookEngine {
         if level.is_empty() {
             book_side.remove(&location.price);
         }
-        let new_top = book.get_top(location.side, location.price);
+        let new_top = book.get_top(location.side);
         let book_is_empty = book.get_by_side(Side::Bid).is_empty()
             && book.get_by_side(Side::Ask).is_empty();
         if book_is_empty {
@@ -278,6 +278,7 @@ mod tests {
     use crate::model::order::{Quantity, StoredOrder, UserId, UserOrderId};
 
     mod cancel_flush;
+    mod reference;
 
     type Snapshot = (
         HashMap<Symbol, OrderBook>,
@@ -386,7 +387,7 @@ mod tests {
             let idx = assert_location(&engine, 2, "BTC", side, worse);
             let book = &engine.books["BTC"];
             assert_eq!(book.get_by_side(side)[&worse].inspect(), (3, Some(idx), Some(idx)));
-            assert_eq!(book.get_top(side, worse).unwrap().inspect(), (100, 5));
+            assert_eq!(book.get_top(side).unwrap().inspect(), (100, 5));
         }
     }
 

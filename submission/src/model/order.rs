@@ -58,7 +58,7 @@ enum OrderSlot {
     },
 }
 
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug, Default)]
 pub struct Orders {
     slots: Vec<OrderSlot>,
     first_free: Option<OrderIndex>,

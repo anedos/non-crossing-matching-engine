@@ -67,3 +67,11 @@ The mixed workload exercises freed-slot reuse. Compare allocation counts and byt
 - [allocation-counter](https://docs.rs/allocation-counter/latest/allocation_counter/): thread-local allocation accounting through an instrumented global allocator. These workloads are single-threaded.
 
 The existing [Criterion benchmarks](../README.md) remain the tool for average throughput and baseline comparisons.
+
+The shared workload invariants (command counts, acceptance, live-order bound, and populated levels) can be checked with:
+
+```sh
+rustup run 1.92.0 cargo test --manifest-path submission/benches/metrics/Cargo.toml --locked
+```
+
+If your environment overrides the compiler, also set `RUSTC="$(rustup which --toolchain 1.92.0 rustc)"` for that command, as the benchmark scripts do.

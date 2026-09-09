@@ -8,6 +8,8 @@ For per-command P90/P95/P99/P99.9 and heap allocation measurements, see the sepa
 
 The script uses Rust 1.92.0 specifically for benchmarking because Criterion 0.8 requires a newer compiler than the non-crossing matching engine assessment. It leaves your default toolchain unchanged. If rustup or Rust 1.92.0 is missing, it exits with installation instructions; it does not download anything automatically. The script works from any working directory and forwards arguments to Criterion. Run it without arguments for a normal benchmark run.
 
+Criterion is an independent package under `benches/criterion`, so its dependencies are not resolved by production builds or engine tests. The script keeps using `submission/target` for artifacts and existing saved baselines. Run `./submission/benches/run.sh --test` for benchmark smoke checks; `cargo test --manifest-path submission/Cargo.toml` runs engine and I/O tests. Host-only benchmarks are excluded from the Docker build context.
+
 The engine now uses `ahash::AHashMap`. To compare it against an existing standard-hasher baseline on the same machine and toolchain:
 
 ```sh

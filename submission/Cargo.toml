@@ -1,7 +1,10 @@
 [package]
 name = "non_crossing_matching_engine"
+description = "A non-crossing order engine in Rust optimised for correctness and performance"
 version = "0.1.0"
 edition = "2021"
+autobenches = false
+authors = ["Andronikos Nedos <nedosa@gmail.com>"]
 
 [[bin]]
 name = "non_crossing_matching_engine"
@@ -14,10 +17,3 @@ ahash = "0.8"
 log = "0.4"
 env_logger = { version = "0.11", default-features = false }
 serde = { version = "1.0.229", features = ["derive", "rc"] }
-
-[dev-dependencies]
-criterion = { version = "0.8", features = ["html_reports"] }
-
-[[bench]]
-name = "order_events"
-harness = false

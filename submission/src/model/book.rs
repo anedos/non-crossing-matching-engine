@@ -69,7 +69,7 @@ impl PriceLevel {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 #[cfg_attr(test, derive(Clone, PartialEq, Eq))]
 pub struct OrderBook {
     bids: BTreeMap<Price, PriceLevel>,
@@ -111,7 +111,7 @@ impl OrderBook {
         }
     }
 
-    pub fn get_top(&self, side: Side, price: Price, ) -> Option<TopOfBook> {
+    pub fn get_top(&self, side: Side) -> Option<TopOfBook> {
         let book_side = self.get_by_side(side);
         let (&price, level) = match side {
             Side::Bid => book_side.last_key_value(),
