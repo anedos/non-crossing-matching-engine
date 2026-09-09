@@ -236,6 +236,7 @@ mod tests {
 
     #[test]
     fn records_support_string_separators_and_unsigned_extremes() {
+        crate::test_logging::init_test_logging();
         for separator in [", ", "|", "\t"] {
             let mut output = Vec::new();
             write_record(&mut output, &("A", 0_u64, u64::MAX), separator).unwrap();
@@ -252,6 +253,7 @@ mod tests {
 
     #[test]
     fn unsupported_values_return_errors() {
+        crate::test_logging::init_test_logging();
         fn check(value: impl Serialize, kind: &str) {
             let error = write_record(&mut Vec::new(), &value, ", ").unwrap_err();
             assert_eq!(

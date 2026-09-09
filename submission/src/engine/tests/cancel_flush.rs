@@ -46,6 +46,7 @@ fn assert_fifo(
 
 #[test]
 fn cancelling_first_middle_or_last_order_preserves_remaining_fifo() {
+    crate::test_logging::init_test_logging();
     for side in [Side::Bid, Side::Ask] {
         for removed in 0..3 {
             let mut engine = OrderBookEngine::new();
@@ -69,6 +70,7 @@ fn cancelling_first_middle_or_last_order_preserves_remaining_fifo() {
 
 #[test]
 fn cancelling_best_level_promotes_next_price_then_empties_the_book() {
+    crate::test_logging::init_test_logging();
     for (side, worse) in [(Side::Bid, 90), (Side::Ask, 110)] {
         let mut engine = OrderBookEngine::new();
         insert(&mut engine, order(1, "BTC", side, 100, 2));
@@ -88,6 +90,7 @@ fn cancelling_best_level_promotes_next_price_then_empties_the_book() {
 
 #[test]
 fn cancelling_at_a_worse_price_emits_only_accepted() {
+    crate::test_logging::init_test_logging();
     for (side, worse) in [(Side::Bid, 90), (Side::Ask, 110)] {
         let mut engine = OrderBookEngine::new();
         let best = insert(&mut engine, order(1, "BTC", side, 100, 2));
@@ -106,6 +109,7 @@ fn cancelling_at_a_worse_price_emits_only_accepted() {
 
 #[test]
 fn cancellation_keeps_other_symbols_sides_and_levels_unchanged() {
+    crate::test_logging::init_test_logging();
     for (side, opposite, other_price, worse) in [
         (Side::Bid, Side::Ask, 110, 90),
         (Side::Ask, Side::Bid, 90, 110),
@@ -138,6 +142,7 @@ fn cancellation_keeps_other_symbols_sides_and_levels_unchanged() {
 
 #[test]
 fn unknown_repeated_and_wrong_user_cancellation_do_not_mutate_state() {
+    crate::test_logging::init_test_logging();
     let mut engine = OrderBookEngine::new();
     insert(&mut engine, order(1, "BTC", Side::Bid, 100, 2));
     let before = snapshot(&engine);
@@ -167,6 +172,7 @@ fn unknown_repeated_and_wrong_user_cancellation_do_not_mutate_state() {
 
 #[test]
 fn zero_total_level_remains_until_its_last_order_is_cancelled() {
+    crate::test_logging::init_test_logging();
     for side in [Side::Bid, Side::Ask] {
         let mut engine = OrderBookEngine::new();
         insert(&mut engine, order(1, "BTC", side, 100, 5));
@@ -188,6 +194,7 @@ fn zero_total_level_remains_until_its_last_order_is_cancelled() {
 
 #[test]
 fn freed_slots_are_reused_in_reverse_removal_order_with_fresh_links() {
+    crate::test_logging::init_test_logging();
     for side in [Side::Bid, Side::Ask] {
         let mut engine = OrderBookEngine::new();
         let first = insert(&mut engine, order(1, "BTC", side, 100, 2));
@@ -216,6 +223,7 @@ fn freed_slots_are_reused_in_reverse_removal_order_with_fresh_links() {
 
 #[test]
 fn cancellation_from_maximum_total_allows_new_quantity() {
+    crate::test_logging::init_test_logging();
     for side in [Side::Bid, Side::Ask] {
         let mut engine = OrderBookEngine::new();
         insert(&mut engine, order(1, "BTC", side, 100, Quantity::MAX - 5));
@@ -228,6 +236,7 @@ fn cancellation_from_maximum_total_allows_new_quantity() {
 
 #[test]
 fn flush_is_silent_and_resets_empty_or_populated_engines() {
+    crate::test_logging::init_test_logging();
     for populated in [false, true] {
         let mut engine = OrderBookEngine::new();
         if populated {
@@ -282,6 +291,7 @@ fn event_record(event: Event) -> csv::StringRecord {
 
 #[test]
 fn engine_events_match_all_twelve_supplied_fixtures() {
+    crate::test_logging::init_test_logging();
     let fixtures = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../test");
     for case in 1..=12 {
         let path = fixtures.join(case.to_string());

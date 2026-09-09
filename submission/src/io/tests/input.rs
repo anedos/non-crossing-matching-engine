@@ -5,6 +5,7 @@ use csv::StringRecord;
 
 #[test]
 fn parses_all_commands_and_unsigned_boundaries() {
+    crate::test_logging::init_test_logging();
     let max = u64::MAX.to_string();
     for (token, expected_side) in [("B", Side::Bid), ("S", Side::Ask)] {
         let record = StringRecord::from(vec!["N", &max, "BTC,USD", "0", &max, token, &max]);
@@ -34,6 +35,7 @@ fn parses_all_commands_and_unsigned_boundaries() {
 
 #[test]
 fn rejects_invalid_shapes_types_and_numeric_overflow() {
+    crate::test_logging::init_test_logging();
     for fields in [
         vec![],
         vec![""],

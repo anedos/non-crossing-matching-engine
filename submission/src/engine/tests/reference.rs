@@ -98,6 +98,7 @@ fn assert_state(engine: &OrderBookEngine, reference: &[NewOrder]) {
 
 #[test]
 fn mixed_sequences_match_flat_reference_and_preserve_fifo() {
+    crate::test_logging::init_test_logging();
     for seed in [1_u64, 17, 982_451_653, u64::MAX] {
         let mut random = seed;
         let mut next = || {

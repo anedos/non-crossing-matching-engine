@@ -153,6 +153,17 @@ Logging is disabled by default. All enabled diagnostics go to stderr; stdout is 
 `RUST_LOG=warn` for engine warnings, or
 `RUST_LOG=off` to disable logging explicitly. Fatal errors are still reported on stderr by the executable.
 
+Unit and integration tests also support optional logging, through a shared `init_test_logging` helper.
+From the repository root:
+
+```sh
+RUST_LOG=non_crossing_matching_engine=debug cargo test --manifest-path submission/Cargo.toml -- --nocapture
+```
+
+Without `RUST_LOG`, test logging stays off. Add a test-name filter before `--` to inspect a particular test,
+or `--test-threads=1` after it to avoid interleaved output. The subprocess tests for production logging
+set their own filters so they can verify that logging is silent by default and stays on stderr.
+
 ## Output serialization
 
 `write_event(&mut writer, &event, separator)` writes one event and a newline using a small custom Serde serializer. The

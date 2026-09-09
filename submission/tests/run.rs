@@ -1,6 +1,9 @@
 use std::io::{self, Write};
 use std::process::{Command, Stdio};
 
+#[path = "support/logging.rs"]
+mod test_logging;
+
 struct FailingWriter {
     remaining: usize,
     fail_flush: bool,
@@ -27,6 +30,7 @@ impl Write for FailingWriter {
 
 #[test]
 fn run_propagates_buffered_write_and_flush_failures() {
+    test_logging::init_test_logging();
     for writer in [
         FailingWriter {
             remaining: 0,
@@ -45,6 +49,7 @@ fn run_propagates_buffered_write_and_flush_failures() {
 
 #[test]
 fn executable_matches_all_twelve_fixtures_byte_for_byte() {
+    test_logging::init_test_logging();
     let fixtures = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../test");
     for case in 1..=12 {
         let path = fixtures.join(case.to_string());
@@ -80,6 +85,7 @@ fn executable_matches_all_twelve_fixtures_byte_for_byte() {
 
 #[test]
 fn csv_whitespace_quoted_symbols_crlf_and_missing_final_newline() {
+    test_logging::init_test_logging();
     let input = b"\r\n N , 1 ,\"BTC,USD\", 10 , 2 , B , 1\r\nC,1,1\r\nF";
     let mut output = Vec::new();
     non_crossing_matching_engine::run(input.as_slice(), &mut output).unwrap();
@@ -93,6 +99,7 @@ fn csv_whitespace_quoted_symbols_crlf_and_missing_final_newline() {
 
 #[test]
 fn invalid_commands_report_record_number_and_stop_processing() {
+    test_logging::init_test_logging();
     for (bad, expected) in [
         ("N,1,BTC,bad,2,B,2", "invalid command in CSV record 2"),
         ("C,1,99", "failed to process command 2"),
@@ -108,6 +115,7 @@ fn invalid_commands_report_record_number_and_stop_processing() {
 
 #[test]
 fn read_failure_and_invalid_utf8_are_reported() {
+    test_logging::init_test_logging();
     struct FailedReader;
     impl io::Read for FailedReader {
         fn read(&mut self, _: &mut [u8]) -> io::Result<usize> {
@@ -126,6 +134,7 @@ fn read_failure_and_invalid_utf8_are_reported() {
 
 #[test]
 fn buffered_write_failure_during_processing_is_reported() {
+    test_logging::init_test_logging();
     let input = "N,1,BTC,10,1,B,1\nC,1,1\n".repeat(1_000);
     let error = non_crossing_matching_engine::run(
         input.as_bytes(),
@@ -143,6 +152,7 @@ fn buffered_write_failure_during_processing_is_reported() {
 
 #[test]
 fn executable_returns_failure_and_diagnostics_for_invalid_input() {
+    test_logging::init_test_logging();
     let mut child = Command::new(env!("CARGO_BIN_EXE_non_crossing_matching_engine"))
         .env_remove("RUST_LOG")
         .stdin(Stdio::piped())

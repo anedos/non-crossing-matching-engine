@@ -346,6 +346,7 @@ mod tests {
 
     #[test]
     fn first_order_creates_level_and_emits_accepted_then_top() {
+        crate::test_logging::init_test_logging();
         for side in [Side::Bid, Side::Ask] {
             let mut engine = OrderBookEngine::new();
             let events = engine.process_new(order(1, "BTC", side, 100, 5)).unwrap();
@@ -365,6 +366,7 @@ mod tests {
 
     #[test]
     fn better_price_changes_top_to_new_levels_quantity() {
+        crate::test_logging::init_test_logging();
         for (side, better) in [(Side::Bid, 110), (Side::Ask, 90)] {
             let mut engine = OrderBookEngine::new();
             let initial = engine.process_new(order(1, "BTC", side, 100, 5)).unwrap();
@@ -378,6 +380,7 @@ mod tests {
 
     #[test]
     fn worse_price_is_stored_without_top_change() {
+        crate::test_logging::init_test_logging();
         for (side, worse) in [(Side::Bid, 90), (Side::Ask, 110)] {
             let mut engine = OrderBookEngine::new();
             let initial = engine.process_new(order(1, "BTC", side, 100, 5)).unwrap();
@@ -393,6 +396,7 @@ mod tests {
 
     #[test]
     fn same_price_orders_update_total_and_keep_fifo_links() {
+        crate::test_logging::init_test_logging();
         for side in [Side::Bid, Side::Ask] {
             let mut engine = OrderBookEngine::new();
             for (id, quantity, total) in [(1, 5, 5), (2, 3, 8), (3, 7, 15)] {
@@ -414,6 +418,7 @@ mod tests {
 
     #[test]
     fn crossing_orders_are_rejected_without_mutation() {
+        crate::test_logging::init_test_logging();
         for (resting_side, incoming_side, crossing_prices) in [
             (Side::Ask, Side::Bid, [100, 101]),
             (Side::Bid, Side::Ask, [100, 99]),
@@ -439,6 +444,7 @@ mod tests {
 
     #[test]
     fn duplicate_identity_is_rejected_without_creating_another_book() {
+        crate::test_logging::init_test_logging();
         let mut engine = OrderBookEngine::new();
         let initial = engine.process_new(order(1, "BTC", Side::Bid, 100, 5)).unwrap();
         assert_events(initial, 1, Side::Bid, Some((100, 5)));
@@ -452,6 +458,7 @@ mod tests {
 
     #[test]
     fn symbols_sides_and_price_levels_have_independent_orders() {
+        crate::test_logging::init_test_logging();
         let mut engine = OrderBookEngine::new();
         let inputs = [
             (1, "BTC", Side::Bid, 100, 2),
@@ -491,6 +498,7 @@ mod tests {
 
     #[test]
     fn maximum_total_succeeds_and_overflow_leaves_state_unchanged() {
+        crate::test_logging::init_test_logging();
         for side in [Side::Bid, Side::Ask] {
             let mut engine = OrderBookEngine::new();
             let initial = engine.process_new(order(1, "BTC", side, 100, Quantity::MAX - 5)).unwrap();
@@ -514,6 +522,7 @@ mod tests {
 
     #[test]
     fn allocation_failure_preserves_existing_levels_and_creates_no_entries() {
+        crate::test_logging::init_test_logging();
         for side in [Side::Bid, Side::Ask] {
             let better = match side { Side::Bid => 110, Side::Ask => 90 };
             for (seed_book, symbol, price, expected_total) in [

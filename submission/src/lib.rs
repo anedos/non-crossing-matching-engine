@@ -2,6 +2,10 @@ pub mod engine;
 pub mod io;
 pub mod model;
 
+#[cfg(test)]
+#[path = "../tests/support/logging.rs"]
+mod test_logging;
+
 use std::io::{Read, Write};
 
 use anyhow::{Context, Result};

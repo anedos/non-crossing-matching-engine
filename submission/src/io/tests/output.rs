@@ -8,6 +8,7 @@ use crate::model::order::{Side, Symbol, UserId, UserOrderId};
 
 #[test]
 fn every_event_shape_supports_custom_separators() {
+    crate::test_logging::init_test_logging();
     for separator in [", ", "|", "\t"] {
         for (side, side_token) in [(Side::Bid, "B"), (Side::Ask, "S")] {
             let mut engine = OrderBookEngine::new();
@@ -75,6 +76,7 @@ impl Write for FailingWriter {
 
 #[test]
 fn write_errors_preserve_the_io_cause_at_every_byte_boundary() {
+    crate::test_logging::init_test_logging();
     let event = Event::Accepted {
         user_id: UserId(1),
         user_order_id: UserOrderId(2),

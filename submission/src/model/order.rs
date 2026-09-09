@@ -194,6 +194,7 @@ mod tests {
 
     #[test]
     fn clear_retains_capacity_and_resets_free_list() {
+        crate::test_logging::init_test_logging();
         let mut orders = Orders::new();
         let first = orders.append_after(None, 2).unwrap();
         let second = orders.append_after(Some(first), 3).unwrap();

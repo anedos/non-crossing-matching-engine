@@ -168,6 +168,7 @@ mod tests {
 
     #[test]
     fn empty_book_never_crosses() {
+        crate::test_logging::init_test_logging();
         let book = OrderBook::new();
         for side in [Side::Bid, Side::Ask] {
             for price in [0, 100, Price::MAX] {
@@ -178,6 +179,7 @@ mod tests {
 
     #[test]
     fn same_side_orders_do_not_cause_crossing() {
+        crate::test_logging::init_test_logging();
         let bids_only = book_with_prices(&[90, 100], &[]);
         let asks_only = book_with_prices(&[], &[100, 110]);
         for price in [0, 100, Price::MAX] {
@@ -188,6 +190,7 @@ mod tests {
 
     #[test]
     fn bid_crosses_at_or_above_best_ask() {
+        crate::test_logging::init_test_logging();
         let book = book_with_prices(&[], &[100]);
         assert!(!book.crosses(Side::Bid, 99));
         assert!(book.crosses(Side::Bid, 100));
@@ -196,6 +199,7 @@ mod tests {
 
     #[test]
     fn ask_crosses_at_or_below_best_bid() {
+        crate::test_logging::init_test_logging();
         let book = book_with_prices(&[100], &[]);
         assert!(book.crosses(Side::Ask, 99));
         assert!(book.crosses(Side::Ask, 100));
@@ -204,6 +208,7 @@ mod tests {
 
     #[test]
     fn crossing_uses_best_opposing_price_across_multiple_levels() {
+        crate::test_logging::init_test_logging();
         let book = book_with_prices(&[80, 90, 70], &[120, 110, 130]);
         assert!(!book.crosses(Side::Bid, 109));
         assert!(book.crosses(Side::Bid, 110));
@@ -215,6 +220,7 @@ mod tests {
 
     #[test]
     fn removing_best_ask_updates_bid_crossing() {
+        crate::test_logging::init_test_logging();
         let mut book = book_with_prices(&[], &[100, 110]);
         assert!(book.crosses(Side::Bid, 105));
         book.asks.remove(&100);
@@ -226,6 +232,7 @@ mod tests {
 
     #[test]
     fn removing_best_bid_updates_ask_crossing() {
+        crate::test_logging::init_test_logging();
         let mut book = book_with_prices(&[90, 100], &[]);
         assert!(book.crosses(Side::Ask, 95));
         book.bids.remove(&100);
@@ -237,6 +244,7 @@ mod tests {
 
     #[test]
     fn crossing_handles_price_extremes() {
+        crate::test_logging::init_test_logging();
         let zero_ask = book_with_prices(&[], &[0]);
         assert!(zero_ask.crosses(Side::Bid, 0));
         assert!(zero_ask.crosses(Side::Bid, Price::MAX));
