@@ -148,7 +148,7 @@ impl Orders {
     }
 
     fn add_order(&mut self, order: StoredOrder) -> Result<OrderIndex, std::num::TryFromIntError> {
-        // Exercise the capacity-error path without allocating billions of slots.
+        // Test the capacity-error path without allocating billions of slots.
         #[cfg(test)]
         if std::mem::take(&mut self.fail_next_allocation) {
             return u32::try_from(u64::MAX).map(OrderIndex);

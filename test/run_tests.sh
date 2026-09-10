@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# non-crossing matching engine Interview Test Runner
+# Non-crossing matching engine test runner
 # Supports multiple input modes: stdin (default) or UDP
 
 BIN="/non_crossing_matching_engine/build/non_crossing_matching_engine"
@@ -169,16 +169,16 @@ total_tests=$((passed_tests + failed_tests))
 cat > "$REPORT" << EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <testsuites>
-  <testsuite name="InterviewTests" tests="$total_tests" failures="$failed_tests" errors="0" time="$total_time" timestamp="$(date -Iseconds)">
+  <testsuite name="OrderBookTests" tests="$total_tests" failures="$failed_tests" errors="0" time="$total_time" timestamp="$(date -Iseconds)">
 EOF
 
 for result in "${test_results[@]}"; do
     IFS=':' read -r status name time message <<< "$result"
     if [ "$status" = "PASS" ]; then
-        echo "    <testcase name=\"test_$name\" classname=\"InterviewTests\" time=\"$time\"/>" >> "$REPORT"
+        echo "    <testcase name=\"test_$name\" classname=\"OrderBookTests\" time=\"$time\"/>" >> "$REPORT"
     else
         cat >> "$REPORT" << TESTCASE
-    <testcase name="test_$name" classname="InterviewTests" time="$time">
+    <testcase name="test_$name" classname="OrderBookTests" time="$time">
       <failure message="Test failed" type="AssertionError">$message</failure>
     </testcase>
 TESTCASE

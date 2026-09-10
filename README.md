@@ -1,18 +1,34 @@
-# Order book engine
+# Non-crossing matching engine
 
-The system presented here is a non-crossing order engine as per the specification in [EXERCISE.md](EXERCISE.md). This
-is a single-threaded order engine optimized for fast processing and memory efficiency. It has minimal dependencies, unit
-and integration tests and two different benchmarking suites, one based
-on [Criterion](https://github.com/bheisler/criterion.rs)
-and a bespoke one that measures latency percentiles (P90, P95, P99 and P99.9) and heap allocation. No middleware
-currently exists between order input, processing and output. However, due to the engine's modularity, a message bus
-could be added to decouple order processing from I/O. There is no order matching done by the engine as it wasn't asked
-for by the specification.
+A single-threaded Rust limit-order-book engine that accepts CSV commands from stdin and publishes CSV events to stdout.
+It maintains price-time priority within each symbol and side. Orders that would cross the best opposing price are
+rejected; they are not matched. The crate has minimal dependencies, unit and integration tests, and two benchmarking
+suites: [Criterion](https://github.com/bheisler/criterion.rs) for throughput and a dedicated suite for latency
+percentiles and heap allocation.
+
+## Protocol
+
+Input records are CSV, with optional surrounding whitespace:
+
+| Command | Record |
+| --- | --- |
+| New order | `N, userId, symbol, price, quantity, side, userOrderId` |
+| Cancel order | `C, userId, userOrderId` |
+| Flush | `F` |
+
+`side` is `B` for a bid and `S` for an ask. Prices and quantities are unsigned integers. Output records are:
+
+| Event | Record |
+| --- | --- |
+| Accepted | `A, userId, userOrderId` |
+| Rejected | `R, userId, userOrderId` |
+| Top of book changed | `B, side, price, totalQuantity` |
+
+An empty side is emitted as `B, side, -, -`.
 
 ## Objectives
 
-1. Correctness, strict adherence to the specification given in the exercise. Where ambiguity or gaps exist, sound and
-   explicit assumptions have been made, documented below.
+1. Correctness, deterministic protocol handling and explicit treatment of invalid or ambiguous inputs.
 2. Performance, the engine has been written with performance in mind, specifically, minimising memory allocation and
    processing overhead.
 3. Modularity, the engine decouples processing from I/O and the crate acts as both an executable and a library. This was
@@ -107,14 +123,14 @@ cargo build --release
 cargo test
 ```
 
-The supplied non-crossing matching engine Docker build and all 12 stdin test cases have also passed with Rust 1.75 on Linux x64:
+The Docker suite runs all 12 stdin fixture cases with Rust 1.75 on Linux x64:
 
 ```sh
 docker build --platform linux/amd64 -t non-crossing-matching-engine .
 docker run --rm --platform linux/amd64 non-crossing-matching-engine
 ```
 
-Tests cover the supplied fixtures, malformed input, I/O failures and engine edge cases. A separate test compares 8,000
+Tests cover the fixture set, malformed input, I/O failures and engine edge cases. A separate test compares 8,000
 mixed commands against a simple reference model, including FIFO links and aggregate quantities.
 
 ## Performance
@@ -171,11 +187,11 @@ set their own filters so they can verify that logging is silent by default and s
 ## Output serialization
 
 `write_event(&mut writer, &event, separator)` writes one event and a newline using a small custom Serde serializer. The
-executable uses `", "` to match the exercise; library callers can pass separators such as `"|"` or `"\t"`.
+executable uses `", "` for its CSV protocol; library callers can pass separators such as `"|"` or `"\t"`.
 
 The serializer streams flat tuples of strings and unsigned integers without building intermediate field vectors. Other
 Serde types return errors. Fields and separators are written verbatim without CSV quoting or escaping; this is intended
-for the exercise's fixed tokens and integer fields, not arbitrary text CSV serialization. Buffering and the final flush
+for the protocol's fixed tokens and integer fields, not arbitrary text CSV serialization. Buffering and the final flush
 belong to `run`; write and flush errors propagate to the caller.
 
 ## Future work
